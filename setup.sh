@@ -26,9 +26,21 @@ for c in python3.13 python3.12 python3.11 python3.10 python3; do
 done
 if [ -z "$PY" ]; then
   echo "Python 3.10 or newer is needed and none was found."
-  echo "On a Mac:   brew install python@3.12     (then re-run this script)"
-  echo "Or install from https://www.python.org/downloads/"
-  exit 1
+  if command -v brew >/dev/null 2>&1; then
+    echo "Homebrew is installed. Install python@3.12 with it now? [Y/n]"
+    read -r ans
+    if [ "${ans:-Y}" != "n" ] && [ "${ans:-Y}" != "N" ]; then
+      brew install python@3.12 || { echo "brew install failed"; exit 1; }
+      PY="$(brew --prefix python@3.12)/bin/python3.12"
+    fi
+  else
+    echo "Two ways to get it:"
+    echo "  1. Install Homebrew (https://brew.sh), then:  brew install python@3.12"
+    echo "  2. Download the macOS installer from https://www.python.org/downloads/"
+    echo "Then run this script again."
+    exit 1
+  fi
+  [ -n "$PY" ] || exit 1
 fi
 echo "Using $PY ($("$PY" --version))"
 
