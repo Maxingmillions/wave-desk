@@ -33,7 +33,7 @@ from textual.widgets import Button, DataTable, Footer, Input, Label, RichLog, St
 import config
 import scanner
 from telegram_bot import Telegram
-from wave_rider import MODES, SimBroker, WaveRider
+from wave_rider import MODES, SimBroker, WaveRider, make_broker
 
 GAIN, LOSS, WAVE, MUTED, TEXT = "#3ddc97", "#ff6b6b", "#f5b544", "#7c8ba3", "#d6deea"
 
@@ -677,25 +677,6 @@ class WaveDesk(App):
 
 
 # ----------------------------------------------------------------- entry
-async def make_broker(sim: bool, log=print):
-    if not sim:
-        try:
-            from ibkr_broker import IBKRBroker
-            b = IBKRBroker()
-            if await b.connect():
-                return b, False
-            log(f"TWS / IB Gateway not reachable at {config.IBKR_HOST}:{config.IBKR_PORT}; using the simulator.")
-        except RuntimeError as e:
-            log(f"{e}; using the simulator.")
-    st = {}
-    try:
-        import json
-        st = json.loads(config.WAVE_STATE_PATH.read_text()).get("sim", {})
-    except (OSError, ValueError):
-        pass
-    return SimBroker(starting_cash=float(config.STARTING_EQUITY), state=st), True
-
-
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--sim", action="store_true", help="no broker; simulate fills and trailing stops")

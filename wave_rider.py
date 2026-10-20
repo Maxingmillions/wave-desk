@@ -564,3 +564,26 @@ class WaveRider:
             await tg.send_async(f"scanned: {len(sigs)} waves")
         else:
             await tg.send_async(f"unknown command /{esc(cmd)}\n\n{HELP}")
+
+
+# ----------------------------------------------------------------- broker factory
+async def make_broker(sim: bool, log=print):
+    """IBKR via TWS/Gateway when reachable (and not --sim), else the simulator. Returns (broker, fell_back)."""
+    if not sim:
+        try:
+            from ibkr_broker import IBKRBroker
+            b = IBKRBroker()
+            if await b.connect():
+                return b, False
+            log(f"TWS / IB Gateway not reachable at {config.IBKR_HOST}:{config.IBKR_PORT}; using the simulator.")
+        except RuntimeError as e:
+            log(f"{e}; using the simulator.")
+    st = {}
+    try:
+        import json
+        st = json.loads(config.WAVE_STATE_PATH.read_text()).get("sim", {})
+    except (OSError, ValueError):
+        pass
+    return SimBroker(starting_cash=float(config.STARTING_EQUITY), state=st), True
+
+

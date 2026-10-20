@@ -65,11 +65,13 @@ fi
 echo
 echo "Running offline tests..."
 ./.venv/bin/python test_desk.py >/tmp/desk-test.log 2>&1 && echo "  desk tests: ok" || { echo "  desk tests FAILED (see /tmp/desk-test.log)"; }
+./.venv/bin/python test_web.py >/tmp/web-test.log 2>&1 && echo "  dashboard tests: ok" || { echo "  dashboard tests FAILED (see /tmp/web-test.log)"; }
 ./.venv/bin/python test_rotation.py >/tmp/rotation-test.log 2>&1 && echo "  planner tests: ok" || { echo "  planner tests FAILED (see /tmp/rotation-test.log)"; }
 
 echo
 echo "Done. Next:"
-echo "  ./.venv/bin/python terminal.py --sim      rehearse with simulated fills"
-echo "  ./.venv/bin/python terminal.py            connect to TWS / IB Gateway (port in .env)"
+echo "  ./.venv/bin/python web.py                 dashboard at http://127.0.0.1:8750 via TWS / IB Gateway"
+echo "  ./.venv/bin/python web.py --sim           same, with simulated fills (no TWS needed)"
+echo "  ./.venv/bin/python terminal.py            the same desk inside the terminal"
 echo "  ./.venv/bin/python plan.py                tomorrow's rotation plan"
 echo

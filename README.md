@@ -46,17 +46,27 @@ the paper account first.
 ## Run
 
 ```
-./.venv/bin/python terminal.py --sim        # rehearse: Yahoo data, simulated fills + trails
-./.venv/bin/python terminal.py              # connect to TWS / IB Gateway (falls back to --sim)
-./.venv/bin/python terminal.py --mode auto  # override WAVE_MODE
+./.venv/bin/python web.py                   # dashboard at http://127.0.0.1:8750, IBKR via TWS / IB Gateway
+./.venv/bin/python web.py --sim             # same page, simulated fills + trails (no TWS needed)
+./.venv/bin/python web.py --mode auto       # override WAVE_MODE
+./.venv/bin/python terminal.py              # the same desk inside the terminal (also --sim)
 ./.venv/bin/python terminal.py --headless   # no UI: rider + Telegram only (for a server)
 ./.venv/bin/python plan.py                  # tomorrow's rotation plan, standalone
 ```
 
+`web.py` binds to localhost only. Open http://127.0.0.1:8750 in a browser;
+every tab sees the same live state over a WebSocket. Data and orders come
+from your IBKR account through TWS / IB Gateway: the scanner uses IBKR's
+server-side scanner and 1-minute bars, positions and orders are read from
+the account, and every buy is a real IBKR order (paper or live, per port).
+Without a market-data subscription IBKR serves delayed quotes; set
+`IBKR_MARKET_DATA=live` once you have one.
+
 ### The desk
 
 Left: the scanner board and the selected wave's headlines and sizing.
-Right: positions with their trailing stops, working orders, the log.
+Right: positions with their trailing stops, working orders, the log. The
+same layout and keys in the browser and in the terminal.
 
 | Key | Does |
 |---|---|
@@ -137,7 +147,8 @@ review-and-approve instructions.
 
 | File | Role |
 |---|---|
-| `terminal.py`, `terminal.tcss` | the desk (Textual) |
+| `web.py`, `static/index.html` | the desk in the browser (FastAPI + WebSocket, localhost only) |
+| `terminal.py`, `terminal.tcss` | the same desk in the terminal (Textual) |
 | `scanner.py` | wave detection and scoring |
 | `wave_rider.py` | rides, sizing, reconciliation, Telegram commands, simulator |
 | `risk.py` | size by risk, guards, settlement / PDT state |
@@ -145,7 +156,7 @@ review-and-approve instructions.
 | `telegram_bot.py` | push + long-poll commands |
 | `plan.py`, `rotation.py` | the rotation planner |
 | `newsfeed.py`, `market_data.py` | news sources, prices, technicals, screeners |
-| `test_desk.py`, `test_rotation.py` | offline tests; the desk is driven headlessly |
+| `test_desk.py`, `test_web.py`, `test_rotation.py` | offline tests; both desks are driven headlessly |
 
 State lives in `wave_state.json`, `portfolio.json`, `meta_cache.json` and
 `plans/`, all gitignored.

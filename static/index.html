@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wave desk</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* One quiet navy surface. Colour only where it carries meaning:
+     sea-green gains, coral losses, amber for a wave that just broke. */
+  :root {
+    --bg: #0e1420; --surface: #121a2a; --surface-2: #162032; --line: #243049;
+    --text: #d6deea; --muted: #7c8ba3; --gain: #3ddc97; --loss: #ff6b6b;
+    --wave: #f5b544; --focus: #5aa9ff; --focus-dim: #2b4a7a;
+    --sans: "IBM Plex Sans", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 var(--sans); }
+  button { font: inherit; }
+
+  /* ---------- frame */
+  .desk { display: grid; height: 100vh; grid-template-rows: auto 1fr auto; }
+  .top { display: flex; align-items: center; gap: 28px; padding: 10px 20px; background: var(--surface);
+         border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 13px; }
+  .top .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--loss); display: inline-block; margin-right: 8px; }
+  .top .dot.on { background: var(--gain); }
+  .top .live { color: var(--loss); font-weight: 500; }
+  .top .k { color: var(--muted); margin-right: 6px; }
+  .top .mode.auto { color: var(--wave); font-weight: 500; }
+  .top .flag { color: var(--loss); margin-left: 8px; }
+  .top .clock { margin-left: auto; color: var(--muted); }
+  .top .scanning { color: var(--wave); }
+
+  .body { display: grid; grid-template-columns: 3fr 2fr; grid-template-rows: 3fr 2fr; gap: 10px; padding: 10px; min-height: 0; }
+  .pane { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; display: flex; flex-direction: column; min-height: 0; }
+  .pane h2 { margin: 0; padding: 8px 14px; font-size: 13px; font-weight: 500; color: var(--muted); border-bottom: 1px solid var(--line);
+             display: flex; align-items: center; gap: 12px; }
+  .pane h2 .count { color: var(--text); font-family: var(--mono); }
+  .pane h2 .actions { margin-left: auto; display: flex; gap: 6px; }
+  .pane .scroll { overflow: auto; min-height: 0; flex: 1; }
+  #waves { grid-row: 1; grid-column: 1; }
+  #detail { grid-row: 2; grid-column: 1; }
+  #right { grid-row: 1 / 3; grid-column: 2; display: grid; grid-template-rows: 2fr 1fr 2fr; gap: 10px; min-height: 0; }
+
+  /* ---------- tables */
+  table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 13px; }
+  th { position: sticky; top: 0; background: var(--surface); color: var(--muted); font-weight: 400; text-align: right;
+       padding: 6px 10px; border-bottom: 1px solid var(--line); }
+  th.l, td.l { text-align: left; }
+  td { padding: 5px 10px; text-align: right; border-bottom: 1px solid rgba(36,48,73,.5); white-space: nowrap; }
+  tr.row { cursor: pointer; }
+  tr.row:hover { background: rgba(36,48,73,.45); }
+  tr.row.sel { background: var(--focus-dim); }
+  td.ticker { font-weight: 500; }
+  .gain { color: var(--gain); } .loss { color: var(--loss); } .muted { color: var(--muted); }
+  .fresh { color: var(--wave); font-weight: 500; }
+  .held { color: var(--gain); }
+  td.hl { max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--sans); text-align: left; }
+  .empty { padding: 18px 14px; color: var(--muted); }
+
+  /* ---------- buttons */
+  .btn { background: var(--line); color: var(--text); border: 0; border-radius: 4px; padding: 5px 10px; cursor: pointer; font-size: 12px; }
+  .btn:hover { background: #2f3f61; }
+  .btn.primary { background: var(--focus-dim); color: #fff; }
+  .btn.primary:hover { background: var(--focus); color: var(--bg); }
+  .btn.danger { background: #5a2a2a; color: #fff; }
+  .btn.danger:hover { background: var(--loss); color: var(--bg); }
+  .btn.on { background: var(--wave); color: var(--bg); }
+  .btn kbd { font-family: var(--mono); color: var(--wave); margin-right: 5px; }
+  .btn.primary kbd, .btn.danger kbd, .btn.on kbd { color: inherit; opacity: .8; }
+  .btn:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+  /* ---------- detail */
+  .detail-body { padding: 12px 14px; overflow: auto; }
+  .detail-body .t { font-family: var(--mono); font-size: 18px; font-weight: 500; color: var(--wave); }
+  .detail-body .n { color: var(--muted); margin-left: 10px; }
+  .detail-body .stats { font-family: var(--mono); margin: 6px 0 10px; display: flex; flex-wrap: wrap; gap: 4px 18px; }
+  .detail-body .stats span b { font-weight: 500; color: var(--text); }
+  .detail-body .stats span { color: var(--muted); }
+  .detail-body ul { list-style: none; padding: 0; margin: 0; }
+  .detail-body li { padding: 3px 0; display: flex; gap: 10px; }
+  .detail-body li .age { font-family: var(--mono); color: var(--muted); min-width: 44px; text-align: right; }
+  .detail-body li a { color: var(--text); text-decoration: none; }
+  .detail-body li a:hover { color: var(--focus); }
+
+  /* ---------- log */
+  .log { font-family: var(--mono); font-size: 12px; padding: 6px 12px; }
+  .log div { padding: 1px 0; white-space: pre-wrap; }
+  .log .t { color: var(--muted); margin-right: 8px; }
+  .log .w { color: var(--wave); }
+
+  /* ---------- footer */
+  .foot { display: flex; gap: 6px; padding: 8px 14px; background: var(--surface); border-top: 1px solid var(--line); flex-wrap: wrap; }
+
+  /* ---------- modal */
+  .overlay { position: fixed; inset: 0; background: rgba(5,8,14,.72); display: none; align-items: center; justify-content: center; }
+  .overlay.open { display: flex; }
+  .dialog { background: var(--surface-2); border: 1px solid var(--focus); border-radius: 8px; padding: 18px 22px; width: 440px; max-width: 95vw; max-height: 90vh; overflow: auto; }
+  .dialog.wide { width: 820px; }
+  .dialog h3 { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
+  .dialog .hint { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+  .dialog .banner { background: #5a2a2a; color: #fff; padding: 6px 10px; border-radius: 4px; margin-bottom: 10px; font-weight: 500; }
+  .dialog label { display: block; margin-top: 10px; color: var(--muted); font-size: 12px; }
+  .dialog input, .dialog select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px;
+                   padding: 7px 9px; font: 14px var(--mono); margin-top: 3px; }
+  .dialog .cost { font-family: var(--mono); color: var(--muted); margin-top: 10px; min-height: 20px; }
+  .dialog .cost.err { color: var(--loss); }
+  .dialog .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .dialog .buttons .btn { padding: 7px 14px; font-size: 13px; }
+
+  .toast { position: fixed; right: 16px; bottom: 56px; background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--wave);
+           padding: 10px 14px; border-radius: 6px; max-width: 360px; display: none; }
+  .toast.err { border-left-color: var(--loss); }
+  .toast.open { display: block; }
+  @media (max-width: 1000px) {
+    .body { grid-template-columns: 1fr; grid-template-rows: auto auto auto; overflow: auto; }
+    #waves, #detail { grid-column: 1; grid-row: auto; }
+    #right { grid-column: 1; grid-row: auto; grid-template-rows: auto auto auto; }
+    .pane .scroll { max-height: 40vh; }
+  }
+</style>
+</head>
+<body>
+<div class="desk">
+  <header class="top" id="top">
+    <span><span class="dot" id="dot"></span><span id="conn">connecting…</span></span>
+  </header>
+
+  <main class="body">
+    <section class="pane" id="waves">
+      <h2>Waves <span class="count" id="wave-count"></span>
+        <span class="actions">
+          <button class="btn" id="btn-scan"><kbd>r</kbd>scan now</button>
+          <button class="btn" id="btn-watch"><kbd>w</kbd>watch</button>
+        </span>
+      </h2>
+      <div class="scroll"><table id="wave-table">
+        <thead><tr><th class="l">ticker</th><th>last</th><th>chg</th><th>rvol</th><th>$vol</th><th class="l">break</th><th>news</th><th>score</th><th>size</th><th>age</th><th class="l">headline</th></tr></thead>
+        <tbody></tbody></table><div class="empty" id="wave-empty">no waves yet — scanning starts when the market is open; r scans now</div></div>
+    </section>
+
+    <section class="pane" id="detail">
+      <h2>Selected wave
+        <span class="actions"><button class="btn primary" id="btn-buy"><kbd>b</kbd>buy</button></span>
+      </h2>
+      <div class="detail-body" id="detail-body"><span class="muted">Pick a wave to see its headlines and sizing.</span></div>
+    </section>
+
+    <div id="right">
+      <section class="pane">
+        <h2>Positions <span class="count" id="pos-count"></span>
+          <span class="actions">
+            <button class="btn" id="btn-trail"><kbd>t</kbd>trail</button>
+            <button class="btn danger" id="btn-flat"><kbd>f</kbd>flat</button>
+          </span>
+        </h2>
+        <div class="scroll"><table id="pos-table">
+          <thead><tr><th class="l">ticker</th><th>qty</th><th>avg</th><th>last</th><th>P&amp;L</th><th>$</th><th>trail</th><th>stop</th></tr></thead>
+          <tbody></tbody></table><div class="empty" id="pos-empty">flat</div></div>
+      </section>
+      <section class="pane">
+        <h2>Working orders <span class="count" id="ord-count"></span>
+          <span class="actions"><button class="btn" id="btn-cancel"><kbd>c</kbd>cancel</button></span>
+        </h2>
+        <div class="scroll"><table id="ord-table">
+          <thead><tr><th>id</th><th class="l">ticker</th><th class="l">side</th><th class="l">type</th><th>qty</th><th class="l">price</th><th class="l">status</th></tr></thead>
+          <tbody></tbody></table><div class="empty" id="ord-empty">none</div></div>
+      </section>
+      <section class="pane">
+        <h2>Log</h2>
+        <div class="scroll log" id="log"></div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <button class="btn" id="btn-mode"><kbd>m</kbd>mode: <span id="mode-label">…</span></button>
+    <button class="btn" id="btn-pause"><kbd>space</kbd><span id="pause-label">pause</span></button>
+    <button class="btn" id="btn-plan"><kbd>p</kbd>rotation plan</button>
+    <span style="margin-left:auto" class="muted" id="foot-note"></span>
+  </footer>
+</div>
+
+<!-- order dialog -->
+<div class="overlay" id="order-overlay">
+  <form class="dialog" id="order-form">
+    <h3 id="order-title">Buy</h3>
+    <div class="banner" id="order-live" style="display:none">This is a LIVE account. The order is real.</div>
+    <div class="hint" id="order-hint"></div>
+    <label>Shares<input id="o-qty" type="number" min="1" step="1" required></label>
+    <label>Limit price (blank = market)<input id="o-limit" type="number" step="0.01"></label>
+    <label>Trailing stop % (0 = none)<input id="o-trail" type="number" step="0.5" min="0"></label>
+    <div class="cost" id="o-cost"></div>
+    <div class="buttons"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn primary">Place order</button></div>
+  </form>
+</div>
+
+<!-- confirm dialog -->
+<div class="overlay" id="confirm-overlay">
+  <div class="dialog">
+    <h3 id="confirm-title"></h3>
+    <div class="hint" id="confirm-body"></div>
+    <div class="buttons"><button class="btn" data-close>Cancel</button><button class="btn primary" id="confirm-ok">Confirm</button></div>
+  </div>
+</div>
+
+<!-- text dialog -->
+<div class="overlay" id="text-overlay">
+  <form class="dialog" id="text-form">
+    <h3 id="text-title"></h3>
+    <div class="hint" id="text-hint"></div>
+    <input id="text-input" autocomplete="off">
+    <div class="buttons"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn primary">OK</button></div>
+  </form>
+</div>
+
+<!-- plan dialog -->
+<div class="overlay" id="plan-overlay">
+  <div class="dialog wide">
+    <h3 id="plan-title">Rotation plan</h3>
+    <div class="hint" id="plan-summary"></div>
+    <table id="plan-table"><thead><tr><th class="l">ticker</th><th>qty</th><th>limit</th><th>stop</th><th class="l">conf</th><th class="l">catalyst</th></tr></thead><tbody></tbody></table>
+    <div class="hint" id="plan-holdings" style="margin-top:10px"></div>
+    <div class="buttons"><button class="btn" data-close>Close</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  let S = null, selected = null, selPos = null, selOrd = null;
+
+  // ---------- helpers
+  const fmt = (v, d = 2) => (v == null || isNaN(v)) ? '-' : Number(v).toLocaleString(undefined, {minimumFractionDigits: d, maximumFractionDigits: d});
+  const pct = (v, d = 1) => (v == null || isNaN(v)) ? '<span class="muted">-</span>' : `<span class="${v > 0 ? 'gain' : v < 0 ? 'loss' : ''}">${v > 0 ? '+' : ''}${fmt(v, d)}%</span>`;
+  const money = (v) => (v == null || isNaN(v)) ? '<span class="muted">-</span>' : `<span class="${v > 0 ? 'gain' : v < 0 ? 'loss' : ''}">${v > 0 ? '+' : ''}${fmt(v, 0)}</span>`;
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+  const age = (iso) => { const m = (Date.now() - Date.parse(iso)) / 60000; if (isNaN(m)) return '<span class="muted">-</span>';
+    const s = m < 90 ? `${Math.round(m)}m` : `${(m / 60).toFixed(1)}h`; return `<span class="${m < 5 ? 'fresh' : m < 30 ? '' : 'muted'}">${s}</span>`; };
+  const toast = (msg, err = false) => { const t = $('toast'); t.textContent = msg; t.className = 'toast open' + (err ? ' err' : ''); clearTimeout(t._h); t._h = setTimeout(() => t.className = 'toast', 6000); };
+  const post = async (path, body) => {
+    const r = await fetch(path, {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body || {})});
+    if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail || m; } catch {} toast(m, true); throw new Error(m); }
+    return r.json();
+  };
+  const isLive = () => S && S.broker && !S.broker.paper;
+
+  // ---------- render
+  function render() {
+    if (!S) return;
+    if (!S.ready) { $('conn').textContent = 'connecting…'; renderLog(); return; }
+    const b = S.broker, a = S.account, c = S.clock;
+    $('top').innerHTML = `
+      <span><span class="dot ${b.connected ? 'on' : ''}" id="dot"></span><span class="${b.paper ? '' : 'live'}">${b.name} ${b.paper ? 'paper' : 'LIVE'}</span> <span class="k"></span><span class="muted">${esc(b.host)}</span></span>
+      <span><span class="k">mode</span><span class="mode ${S.mode}">${S.mode}</span>${S.paused ? '<span class="flag">paused</span>' : ''}${S.halted ? '<span class="flag">halted: ' + esc(S.halted) + '</span>' : ''}</span>
+      <span><span class="k">equity</span>${fmt(a.net_liq, 0)}</span>
+      <span><span class="k">cash</span>${fmt(a.cash, 0)}${a.settled_cash != null && a.settled_cash < a.cash - 1 ? ` <span class="muted">(${fmt(a.settled_cash, 0)} settled)</span>` : ''}</span>
+      <span><span class="k">day</span>${money(a.daily_pnl)}</span>
+      <span><span class="k">rides</span>${S.positions.length}/${S.risk.max_open}</span>
+      <span class="clock">${c.now_et} ET · market ${c.market_open ? 'open' : 'closed'} · <span class="${c.scanning ? 'scanning' : ''}">scan ${c.last_scan || '-'}${c.scanning ? ' …' : ''}</span></span>`;
+
+    // waves
+    const wt = $('wave-table').querySelector('tbody');
+    const held = new Set(S.positions.map(p => p.ticker));
+    if (selected && !S.signals.find(s => s.ticker === selected)) selected = null;
+    if (!selected && S.signals.length) selected = S.signals[0].ticker;
+    wt.innerHTML = S.signals.map(s => `
+      <tr class="row ${s.ticker === selected ? 'sel' : ''}" data-t="${s.ticker}">
+        <td class="l ticker ${held.has(s.ticker) ? 'held' : 'fresh'}">${s.ticker}</td><td>${fmt(s.price)}</td><td>${pct(s.change_pct)}</td>
+        <td>${fmt(s.rel_vol, 1)}x</td><td>${fmt(s.dollar_vol_m, 1)}M</td><td class="l">${s.breakout_label}</td>
+        <td>${s.news_count || '<span class="muted">-</span>'}</td><td><b>${fmt(s.score, 1)}</b></td>
+        <td>${s.suggested_qty || '<span class="muted">-</span>'}</td><td>${age(s.ts)}</td><td class="hl" title="${esc(s.headline)}">${esc(s.headline)}</td></tr>`).join('');
+    $('wave-empty').style.display = S.signals.length ? 'none' : '';
+    $('wave-empty').textContent = S.clock.scanning ? 'scanning…' : (S.clock.market_open ? 'no waves yet — r scans now' : 'market closed — the board fills during the session; r scans anyway');
+    $('wave-count').textContent = S.signals.length || '';
+    wt.querySelectorAll('tr.row').forEach(tr => tr.onclick = () => { selected = tr.dataset.t; render(); });
+
+    // detail
+    const s = S.signals.find(x => x.ticker === selected);
+    $('detail-body').innerHTML = !s ? '<span class="muted">Pick a wave to see its headlines and sizing.</span>' : `
+      <div><span class="t">${s.ticker}</span><span class="n">${esc(s.name)}</span></div>
+      <div class="stats">
+        <span><b>${fmt(s.price)}</b> ${pct(s.change_pct)}</span><span>rvol <b>${fmt(s.rel_vol, 1)}x</b></span><span>traded <b>$${fmt(s.dollar_vol_m, 1)}M</b></span>
+        <span>ATR <b>${fmt(s.atr_pct, 1)}%</b></span><span>via <b>${s.breakout_label}</b></span><span class="muted">${s.source}</span>
+      </div>
+      <div class="stats">
+        <span>size <b>${s.suggested_qty} sh ≈ $${fmt(s.suggested_qty * s.price, 0)}</b></span><span>limit <b>${fmt(s.entry_limit)}</b></span>
+        <span>stop <b>${fmt(s.stop_pct, 0)}%</b></span><span>trail <b>${fmt(s.trail_pct, 0)}%</b></span>
+      </div>
+      ${s.headlines && s.headlines.length ? '<ul>' + s.headlines.map(h => `<li><span class="age">${h.age_h != null ? Number(h.age_h).toFixed(1) + 'h' : '-'}</span><a href="${esc(h.link)}" target="_blank" rel="noopener">${esc(h.title)}</a></li>`).join('') + '</ul>' : '<span class="muted">no headlines in the window</span>'}`;
+
+    // positions
+    const pt = $('pos-table').querySelector('tbody');
+    if (selPos && !S.positions.find(p => p.ticker === selPos)) selPos = null;
+    pt.innerHTML = S.positions.map(p => `
+      <tr class="row ${p.ticker === selPos ? 'sel' : ''}" data-t="${p.ticker}">
+        <td class="l ticker">${p.ticker}</td><td>${fmt(p.quantity, 0)}</td><td>${fmt(p.avg_price)}</td><td>${fmt(p.last)}</td>
+        <td>${pct(p.pnl_pct)}</td><td>${money(p.unrealized_pnl)}</td>
+        <td>${p.trail_pct != null ? fmt(p.trail_pct, 0) + '%' : '<span class="muted">-</span>'}</td>
+        <td>${p.trail_stop != null ? fmt(p.trail_stop) : '<span class="muted">-</span>'}</td></tr>`).join('');
+    $('pos-empty').style.display = S.positions.length ? 'none' : '';
+    $('pos-count').textContent = S.positions.length || '';
+    pt.querySelectorAll('tr.row').forEach(tr => tr.onclick = () => { selPos = tr.dataset.t; render(); });
+
+    // orders
+    const ot = $('ord-table').querySelector('tbody');
+    ot.innerHTML = S.orders.map(o => `
+      <tr class="row ${o.order_id === selOrd ? 'sel' : ''}" data-id="${o.order_id}" data-t="${o.ticker}">
+        <td class="muted">${o.order_id}</td><td class="l ticker">${o.ticker}</td><td class="l ${o.side === 'BUY' ? 'gain' : 'loss'}">${o.side}</td>
+        <td class="l">${o.order_type}</td><td>${fmt(o.quantity, 0)}</td>
+        <td class="l">${o.trail_pct ? 'trail ' + o.trail_pct + '%' : o.stop ? 'stop ' + fmt(o.stop) : o.limit ? 'lmt ' + fmt(o.limit) : 'mkt'}</td><td class="l">${esc(o.status)}</td></tr>`).join('');
+    $('ord-empty').style.display = S.orders.length ? 'none' : '';
+    $('ord-count').textContent = S.orders.length || '';
+    ot.querySelectorAll('tr.row').forEach(tr => tr.onclick = () => { selOrd = Number(tr.dataset.id); selPos = tr.dataset.t; render(); });
+
+    $('mode-label').textContent = S.mode;
+    $('btn-mode').className = 'btn' + (S.mode === 'auto' ? ' on' : '');
+    $('pause-label').textContent = S.paused ? 'resume' : 'pause';
+    $('btn-pause').className = 'btn' + (S.paused ? ' on' : '');
+    $('btn-plan').textContent = ''; $('btn-plan').innerHTML = `<kbd>p</kbd>${S.plan_running ? 'building plan…' : 'rotation plan'}`;
+    $('foot-note').textContent = `risk ${S.risk.risk_pct}% per trade · ${S.risk.account_type} account · realised today ${fmt(S.risk.realized_today, 0)}`;
+    renderLog();
+  }
+  function renderLog() {
+    const el = $('log'); const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+    el.innerHTML = (S.log || []).map(l => `<div><span class="t">${l.t}</span>${esc(l.msg).replace(/^wave /, '<span class="w">wave</span> ')}</div>`).join('');
+    if (atBottom) el.scrollTop = el.scrollHeight;
+  }
+
+  // ---------- dialogs
+  const openOverlay = (id) => { $(id).classList.add('open'); const f = $(id).querySelector('input'); if (f) setTimeout(() => f.focus(), 30); };
+  const closeOverlays = () => document.querySelectorAll('.overlay').forEach(o => o.classList.remove('open'));
+  document.querySelectorAll('[data-close]').forEach(b => b.onclick = closeOverlays);
+  document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) closeOverlays(); }));
+
+  let orderCtx = null;
+  function openOrder(ticker, price, qty, limit, trail, hint) {
+    orderCtx = {ticker, price};
+    $('order-title').textContent = `Buy ${ticker}`;
+    $('order-live').style.display = isLive() ? '' : 'none';
+    $('order-hint').textContent = hint || `last ${fmt(price)}`;
+    $('o-qty').value = qty || ''; $('o-limit').value = limit ? Number(limit).toFixed(2) : ''; $('o-trail').value = trail ?? S.limits.trail;
+    updateCost(); openOverlay('order-overlay');
+  }
+  function updateCost() {
+    const q = Number($('o-qty').value || 0), lim = $('o-limit').value, px = lim ? Number(lim) : orderCtx.price, t = Number($('o-trail').value || 0);
+    let txt = q > 0 && px ? `≈ $${fmt(q * px, 0)}` : '';
+    if (t > 0 && px) txt += `   first trail stop ≈ ${fmt(px * (1 - t / 100))}`;
+    $('o-cost').textContent = txt; $('o-cost').className = 'cost';
+  }
+  ['o-qty', 'o-limit', 'o-trail'].forEach(id => $(id).addEventListener('input', updateCost));
+  $('order-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const qty = Number($('o-qty').value), lim = $('o-limit').value ? Number($('o-limit').value) : null, trail = Number($('o-trail').value || 0);
+    if (!(qty >= 1)) { $('o-cost').textContent = 'Shares must be at least 1.'; $('o-cost').className = 'cost err'; return; }
+    closeOverlays();
+    try { await post('/api/buy', {ticker: orderCtx.ticker, qty, limit: lim, trail_pct: trail, confirm_live: isLive()}); toast(`${orderCtx.ticker}: order sent`); } catch {}
+  };
+
+  let confirmFn = null;
+  function confirm(title, body, fn, danger = false, okLabel = 'Confirm') {
+    $('confirm-title').textContent = title; $('confirm-body').textContent = body;
+    const ok = $('confirm-ok'); ok.textContent = okLabel; ok.className = 'btn ' + (danger ? 'danger' : 'primary');
+    confirmFn = fn; openOverlay('confirm-overlay'); ok.focus();
+  }
+  $('confirm-ok').onclick = () => { closeOverlays(); if (confirmFn) confirmFn(); };
+
+  let textFn = null;
+  function ask(title, hint, value, fn) { $('text-title').textContent = title; $('text-hint').textContent = hint; $('text-input').value = value || ''; textFn = fn; openOverlay('text-overlay'); }
+  $('text-form').onsubmit = (e) => { e.preventDefault(); const v = $('text-input').value.trim(); closeOverlays(); if (v && textFn) textFn(v); };
+
+  function showPlan() {
+    const p = S.plan; if (!p) { toast('No plan yet. Press p to build one.'); return; }
+    $('plan-title').textContent = `Rotation plan for ${p.for_session || '?'} · regime ${p.regime || '?'} · ${p._engine || ''}`;
+    $('plan-summary').textContent = p.market_summary || '';
+    const tb = $('plan-table').querySelector('tbody');
+    tb.innerHTML = (p.buys || []).map(b => `<tr class="row" data-t="${b.ticker}"><td class="l ticker fresh">${b.ticker}</td><td>${b.quantity}</td><td>${fmt(b.limit_price)}</td><td>${fmt(b.stop_price)}</td><td class="l">${b.confidence}</td><td class="hl" title="${esc(b.thesis)}">${esc(b.catalyst)}</td></tr>`).join('')
+      || '<tr><td colspan="6" class="muted l">no buys proposed</td></tr>';
+    tb.querySelectorAll('tr.row').forEach(tr => tr.onclick = () => { const b = p.buys.find(x => x.ticker === tr.dataset.t); closeOverlays(); openOrder(b.ticker, b.limit_price, b.quantity, b.limit_price, S.limits.trail, `from plan: ${b.catalyst}`); });
+    $('plan-holdings').textContent = 'Holdings: ' + ((p.holdings || []).map(h => `${h.ticker} ${h.action}${h.quantity ? ' ' + h.quantity : ''}${h.reason ? ' — ' + h.reason : ''}`).join('; ') || 'none');
+    openOverlay('plan-overlay');
+  }
+
+  // ---------- actions
+  const actions = {
+    buy() { const s = S.signals.find(x => x.ticker === selected); if (!s) { toast('Select a wave first, or w to watch a ticker.'); return; }
+      openOrder(s.ticker, s.price, s.suggested_qty, s.entry_limit, s.trail_pct, `last ${fmt(s.price)} · suggested ${s.suggested_qty} sh (risk ${S.risk.risk_pct}% of equity, stop ${fmt(s.stop_pct, 0)}%)`); },
+    flat() { const p = S.positions.find(x => x.ticker === selPos); if (!p) { toast('Select a position to flatten.'); return; }
+      confirm(`Flatten ${p.ticker}?`, `Cancel working orders and sell ${fmt(p.quantity, 0)} shares at market (last ${fmt(p.last)}, ${p.pnl_pct != null ? (p.pnl_pct > 0 ? '+' : '') + fmt(p.pnl_pct, 1) + '%' : ''}).`,
+        () => post('/api/flat', {ticker: p.ticker}).then(() => toast(`${p.ticker}: flattened`)).catch(() => {}), true, 'Sell all'); },
+    trail() { const p = S.positions.find(x => x.ticker === selPos); if (!p) { toast('Select a position to trail.'); return; }
+      ask(`Trailing stop for ${p.ticker}`, 'Percent below the high-water mark. Replaces any working orders on the name.', p.trail_pct ?? S.limits.trail,
+        v => { const n = Number(v); if (!(n > 0)) { toast('Enter a number above 0.', true); return; } post('/api/trail', {ticker: p.ticker, trail_pct: n}).catch(() => {}); }); },
+    cancel() { const t = selPos || (S.orders.find(o => o.order_id === selOrd) || {}).ticker; if (!t) { toast('Select an order or position.'); return; }
+      confirm(`Cancel orders on ${t}?`, 'Working orders on this name are cancelled; the position stays.', () => post('/api/cancel', {ticker: t}).catch(() => {}), false, 'Cancel orders'); },
+    mode() { const modes = ['signal', 'manual', 'auto']; const nxt = modes[(modes.indexOf(S.mode) + 1) % 3];
+      if (nxt === 'auto') confirm('Switch to auto?', 'Every qualifying wave will be entered with a bracket (limit entry + trailing stop) within the risk guards, without asking. Space pauses at any time.',
+        () => post('/api/mode', {mode: 'auto'}).catch(() => {}), isLive(), 'Go auto');
+      else post('/api/mode', {mode: nxt}).catch(() => {}); },
+    pause() { post('/api/pause', {paused: !S.paused}).catch(() => {}); },
+    scan() { post('/api/scan').then(r => { if (r.ok === false) toast(r.reason); }).catch(() => {}); },
+    watch() { ask('Watch a ticker', 'Added to every scan; r scans it now.', '', v => post('/api/watch', {ticker: v}).then(() => post('/api/scan')).catch(() => {})); },
+    plan() { if (S.plan && !S.plan_running) { showPlan(); return; } if (S.plan_running) { toast('Plan is still building.'); return; }
+      post('/api/plan').then(() => toast('Building the rotation plan (1-3 min). It opens when ready.')).catch(() => {}); },
+  };
+  $('btn-buy').onclick = actions.buy; $('btn-flat').onclick = actions.flat; $('btn-trail').onclick = actions.trail; $('btn-cancel').onclick = actions.cancel;
+  $('btn-mode').onclick = actions.mode; $('btn-pause').onclick = actions.pause; $('btn-scan').onclick = actions.scan; $('btn-watch').onclick = actions.watch; $('btn-plan').onclick = actions.plan;
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { closeOverlays(); return; }
+    if (e.target.matches('input, select, textarea')) return;
+    if (document.querySelector('.overlay.open')) return;
+    const map = {b: 'buy', f: 'flat', t: 'trail', c: 'cancel', m: 'mode', ' ': 'pause', r: 'scan', w: 'watch', p: 'plan'};
+    const a = map[e.key]; if (!a || !S || !S.ready) return;
+    e.preventDefault(); actions[a]();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (!S || !S.ready || document.querySelector('.overlay.open') || e.target.matches('input')) return;
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const i = S.signals.findIndex(s => s.ticker === selected); if (i < 0) return;
+    const j = Math.max(0, Math.min(S.signals.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)));
+    selected = S.signals[j].ticker; render(); e.preventDefault();
+  });
+
+  // ---------- stream
+  let planWasRunning = false;
+  function connect() {
+    const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+    ws.onmessage = (ev) => { const m = JSON.parse(ev.data); if (m.type === 'state') { S = m.state; render();
+      if (planWasRunning && S.plan && !S.plan_running) showPlan(); planWasRunning = !!S.plan_running; } };
+    ws.onclose = () => { const d = $('dot'); if (d) d.className = 'dot'; const c = $('conn'); if (c) c.textContent = 'reconnecting…'; setTimeout(connect, 2000); };
+    const ping = setInterval(() => { if (ws.readyState === 1) ws.send('ping'); else clearInterval(ping); }, 4000);
+  }
+  connect();
+})();
+</script>
+</body>
+</html>
