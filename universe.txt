@@ -1,0 +1,50 @@
+# Candidate pool for terminal.py. One ticker per line; '#' starts a comment.
+# Current holdings and tickers surfaced by news / Yahoo screeners are added
+# automatically, so this is the "always look at" list, not an exhaustive one.
+
+# --- broad market / sector ETFs (regime read + fallback homes for cash)
+SPY
+QQQ
+IWM
+XLE
+XLF
+XLK
+XLV
+XLI
+SMH
+GLD
+SLV
+URA
+COPX
+
+# --- megacap / liquid names
+NVDA
+AAPL
+MSFT
+AMZN
+GOOGL
+META
+TSLA
+AVGO
+AMD
+NFLX
+
+# --- momentum / crypto-adjacent (same neighbourhood as PURR)
+COIN
+MSTR
+HOOD
+PLTR
+SOFI
+RIOT
+MARA
+IBIT
+
+# --- commodity names already in the trend bot
+SGML
+UEC
+TGB
+MP
+SVM
+SBSW
+CCJ
+FCX

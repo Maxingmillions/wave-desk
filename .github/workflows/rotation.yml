@@ -1,0 +1,46 @@
+name: Rotation plan (after the close)
+
+# Builds tomorrow's rotation plan from the day's news and uploads it as an
+# artifact. Holdings come from the PORTFOLIO_JSON secret (same shape as
+# portfolio.example.json). With ANTHROPIC_API_KEY set, Claude writes the plan;
+# without it the rule-based planner runs.
+
+on:
+  schedule:
+    - cron: "40 21 * * 1-5"      # 21:40 UTC = 17:40 ET (EDT) / 16:40 ET (EST)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Write holdings
+        env:
+          PORTFOLIO_JSON: ${{ secrets.PORTFOLIO_JSON }}
+        run: |
+          if [ -n "$PORTFOLIO_JSON" ]; then
+            printf '%s' "$PORTFOLIO_JSON" > portfolio.json
+          else
+            echo "PORTFOLIO_JSON secret not set; planning for an empty account"
+          fi
+      - name: Build plan
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+          COLUMNS: "160"
+        run: python plan.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rotation-plan
+          path: plans/
+          retention-days: 30

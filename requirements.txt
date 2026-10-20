@@ -1,0 +1,10 @@
+# Wave desk + rotation planner. Python 3.10+ (ib_async).
+pandas>=2.0
+requests>=2.31
+python-dotenv>=1.0
+yfinance>=0.2.50
+feedparser>=6.0
+rich>=13.0
+textual>=0.80
+ib_async>=1.0
+anthropic>=0.80       # optional: only needed for the Claude planner

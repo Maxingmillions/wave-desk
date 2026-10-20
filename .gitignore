@@ -1,0 +1,16 @@
+# secrets and local state: never commit
+.env
+portfolio.json
+wave_state.json
+meta_cache.json
+plans/
+
+# local junk
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+
+# editor/session config (skills are shared; everything else is local)
+.claude/*
+!.claude/skills/

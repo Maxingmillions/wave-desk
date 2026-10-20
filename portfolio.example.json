@@ -1,0 +1,9 @@
+{
+  "_comment": "Copy to portfolio.json (gitignored). cash = settled cash available to buy with. Quantities are shares.",
+  "asof": "2026-10-20",
+  "currency": "USD",
+  "cash": 176.44,
+  "positions": [
+    {"ticker": "PURR", "quantity": 457, "avg_price": 8.99}
+  ]
+}
