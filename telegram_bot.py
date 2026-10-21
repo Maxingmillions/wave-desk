@@ -132,3 +132,66 @@ def fmt_positions(positions, rides) -> str:
                     f"({pnl:+.1f}%)  {trail}" if pnl is not None else
                     f"<b>{esc(p.ticker)}</b> {p.quantity:.0f} @ {p.avg_price:.2f}  {trail}")
     return "\n".join(rows)
+
+
+# ----------------------------------------------------------------- setup helper
+def _setup(argv=None):
+    """
+    python telegram_bot.py            # find your chat id and write it to .env
+    python telegram_bot.py --test     # send a test message with the saved settings
+    """
+    import argparse
+    import re
+    import sys
+    from pathlib import Path
+
+    ap = argparse.ArgumentParser(description=_setup.__doc__)
+    ap.add_argument("--test", action="store_true")
+    args = ap.parse_args(argv)
+    env_path = Path(__file__).parent / ".env"
+
+    if args.test:
+        tg = Telegram()
+        if not tg.enabled:
+            sys.exit("TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID missing in .env")
+        ok = tg.send("Wave desk: Telegram is connected. ✅")
+        print("sent" if ok else "failed: check the token, and that you have messaged the bot once")
+        return
+
+    token = config.TELEGRAM_BOT_TOKEN
+    if not token:
+        sys.exit("Put TELEGRAM_BOT_TOKEN in .env first (from @BotFather), then run this again.")
+    me = requests.get(API.format(token=token, method="getMe"), timeout=15).json()
+    if not me.get("ok"):
+        sys.exit("Telegram rejected the token. Copy it again from @BotFather.")
+    name = me["result"]["username"]
+    print(f"Bot @{name} is valid. Open Telegram, send it any message (e.g. 'hi'), then come back.")
+    print("Waiting for your message (Ctrl+C to stop)...")
+    offset = 0
+    while True:
+        try:
+            r = requests.get(API.format(token=token, method="getUpdates"),
+                             params={"offset": offset, "timeout": 25}, timeout=35).json()
+        except requests.RequestException:
+            continue
+        for u in r.get("result", []):
+            offset = u["update_id"] + 1
+            msg = u.get("message") or {}
+            chat = msg.get("chat") or {}
+            if chat.get("id"):
+                cid = str(chat["id"])
+                who = chat.get("first_name") or chat.get("username") or chat.get("title") or ""
+                print(f"Got a message from chat {cid} ({who}).")
+                txt = env_path.read_text() if env_path.exists() else ""
+                if re.search(r"^TELEGRAM_CHAT_ID=.*$", txt, flags=re.M):
+                    txt = re.sub(r"^TELEGRAM_CHAT_ID=.*$", f"TELEGRAM_CHAT_ID={cid}", txt, flags=re.M)
+                else:
+                    txt += f"\nTELEGRAM_CHAT_ID={cid}\n"
+                env_path.write_text(txt)
+                print(f"Saved TELEGRAM_CHAT_ID={cid} to .env")
+                Telegram(token, cid).send("Wave desk: Telegram is connected. ✅")
+                return
+
+
+if __name__ == "__main__":
+    _setup()
